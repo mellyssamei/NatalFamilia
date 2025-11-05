@@ -18,13 +18,30 @@
         .presente-card strong { color: #dc3545; }
         #cadastro-form-area { display: none; padding: 20px; border: 2px dashed #007bff; border-radius: 10px; margin-bottom: 30px; background-color: #eaf4ff; }
         .pre-wrap { white-space: pre-wrap; }
-        /* Estilo para loading */
+        
+        /* Estilo para Loading */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255, 255, 255, 0.8); z-index: 1050;
             display: flex; justify-content: center; align-items: center;
             font-size: 1.2rem;
             flex-direction: column;
+        }
+
+        /* Estilo para Cronômetro */
+        #countdown-container {
+            background-color: #ffc107; /* Amarelo Vibrante */
+            color: #333;
+            padding: 10px 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #countdown {
+            font-size: 1.4rem;
+            font-weight: bold;
+            display: block;
         }
     </style>
 </head>
@@ -39,6 +56,11 @@
 
     <div class="container">
         
+        <div id="countdown-container">
+            <p class="mb-1 small">Prazo final para preenchimento (30/11 - 23:59):</p>
+            <span id="countdown"></span>
+        </div>
+
         <div class="header-section text-center">
             <h2>🎄 Natal da Família 🎁</h2>
             <p class="mb-2">Sorteio de Presentes - Lista de Desejos</p>
@@ -119,6 +141,41 @@
         let presenteCount = 0; 
         const MAX_PRESENTES = 5; // Limite de 5 sugestões para simplificar as colunas do Sheets
 
+        // --- FUNÇÃO DO CRONÔMETRO (NOVA) ---
+        function startCountdown() {
+            // Define a data alvo: 30 de Novembro do ano atual às 23:59:00
+            // Nota: O mês é 11 (Dezembro), então Novembro é 10 (0-indexado)
+            const targetDate = new Date(new Date().getFullYear(), 10, 30, 23, 59, 0).getTime();
+            const countdownElement = document.getElementById('countdown');
+            const cadastroArea = document.getElementById('cadastro-form-area');
+            const toggleButton = document.getElementById('btn-toggle-cadastro');
+
+            const interval = setInterval(function() {
+                const now = new Date().getTime();
+                const distance = targetDate - now;
+
+                // Cálculo do tempo
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                if (distance < 0) {
+                    clearInterval(interval);
+                    countdownElement.innerHTML = "PRAZO ENCERRADO!";
+                    // Desabilita a edição após o prazo
+                    cadastroArea.style.display = 'none';
+                    toggleButton.disabled = true;
+                    toggleButton.textContent = 'PRAZO PARA CADASTRO ENCERRADO';
+                    toggleButton.classList.remove('btn-warning');
+                    toggleButton.classList.add('btn-secondary');
+                } else {
+                    countdownElement.innerHTML = 
+                        `${days}d ${hours}h ${minutes}m ${seconds}s`;
+                }
+            }, 1000);
+        }
+
         // --- Funções de API (SheetDB) ---
         
         function showLoading(msg = 'Carregando...') {
@@ -132,7 +189,7 @@
 
         async function loadData() {
             if (SHEETDB_API_URL.includes('COLE_AQUI_O_SEU_ENDPOINT')) {
-                alert('ERRO: Por favor, configure o SHEETDB_API_URL no JavaScript com seu link da planilha.');
+                // Não exibe erro no carregamento se for o placeholder
                 hideLoading();
                 return;
             }
@@ -144,9 +201,7 @@
                 
                 const rawData = await response.json();
                 
-                // Transforma a lista de Planilhas (Sheets) em um Objeto de JS mais fácil de usar
                 dadosPresentes = rawData.reduce((acc, row) => {
-                    // O campo chave no SheetDB é o primeiro: 'Nome'
                     const nome = row.Nome;
                     if (!nome || !NOMES.includes(nome)) return acc;
 
@@ -155,7 +210,6 @@
                         const linkKey = `Presente_Link_${i}`;
                         const obsKey = `Presente_Obs_${i}`;
                         
-                        // Garante que a linha existe e tem o link preenchido
                         if (row[linkKey]) {
                             presentes.push({
                                 link: row[linkKey] || '',
@@ -171,7 +225,7 @@
                 renderMainList();
             } catch (error) {
                 console.error("Falha ao carregar dados:", error);
-                alert('Erro ao carregar as listas de presente. Verifique a conexão e o URL da API.');
+                alert('Erro ao carregar as listas de presente. Verifique o URL da API ou a conexão.');
             } finally {
                 hideLoading();
             }
@@ -181,22 +235,19 @@
             const nome = dataToSave.Nome;
             showLoading(`Salvando lista de ${nome}...`);
             
-            // 1. Constrói o objeto de dados que o SheetDB espera
             let sheetData = { Nome: nome };
             
-            // Limpa todos os campos existentes antes de salvar os novos
             for (let i = 1; i <= MAX_PRESENTES; i++) {
                 sheetData[`Presente_Link_${i}`] = '';
                 sheetData[`Presente_Obs_${i}`] = '';
             }
 
-            // Preenche os campos com os novos dados (limitado ao MAX_PRESENTES)
             dataToSave.presentes.slice(0, MAX_PRESENTES).forEach((p, i) => {
                 sheetData[`Presente_Link_${i + 1}`] = p.link;
                 sheetData[`Presente_Obs_${i + 1}`] = p.obs;
             });
             
-            // 2. Tenta encontrar e editar a linha existente (usando o campo 'Nome' como chave de busca)
+            // 1. Tenta encontrar e editar a linha existente
             const updateResponse = await fetch(`${SHEETDB_API_URL}/Nome/${encodeURIComponent(nome)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -204,13 +255,12 @@
             });
 
             if (updateResponse.ok) {
-                // Sucesso na edição
                 dadosPresentes[nome] = { presentes: dataToSave.presentes };
                 saveDataSuccess();
                 return;
             }
 
-            // 3. Se falhar na edição (linha não encontrada), tenta adicionar uma nova linha
+            // 2. Se falhar na edição, tenta adicionar uma nova linha
             const addResponse = await fetch(SHEETDB_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -218,28 +268,27 @@
             });
             
             if (addResponse.ok) {
-                // Sucesso na adição
                 dadosPresentes[nome] = { presentes: dataToSave.presentes };
                 saveDataSuccess();
                 return;
             }
             
-            // 4. Falha geral
-            alert('Erro ao salvar ou atualizar a lista. Tente novamente mais tarde.');
+            // 3. Falha geral
+            alert('Erro ao salvar ou atualizar a lista. Verifique se o SheetDB está ativo e se os nomes das colunas estão corretos.');
             hideLoading();
         }
         
         function saveDataSuccess() {
             alert('Lista de Desejos salva/atualizada com sucesso! Todos os familiares podem ver.');
             document.getElementById('cadastro-form-area').style.display = 'none';
-            loadData(); // Recarrega a lista para mostrar as mudanças
+            loadData();
         }
         
 
-        // --- Funções de UI (Mantidas) ---
+        // --- Funções de UI (Limpeza, Adicionar Campo, etc.) ---
         
-        // 1. Renderiza a lista de nomes e status (em ordem alfabética)
         function renderMainList() {
+            // ... (Função renderMainList completa, como na versão anterior) ...
             const listContainer = document.getElementById('main-list');
             listContainer.innerHTML = '';
             
@@ -261,10 +310,9 @@
                 listItem.onclick = () => showPresentesModal(nome);
                 listContainer.appendChild(listItem);
             });
-            populateNameSelect(); // Garante que o select também está atualizado
+            populateNameSelect();
         }
         
-        // 2. Preenche o SELECT de nomes (em ordem alfabética)
         function populateNameSelect() {
             const select = document.getElementById('nomeSelect');
             select.innerHTML = '<option value="" disabled selected>Selecione seu nome para cadastrar/editar</option>'; 
@@ -279,7 +327,6 @@
             select.addEventListener('change', loadDataForEdit);
         }
 
-        // 3. Preenche o Modal de Visualização
         function showPresentesModal(nome) {
             const lista = dadosPresentes[nome] || { presentes: [] };
             const modalTitle = document.getElementById('presentesModalLabel');
@@ -296,7 +343,6 @@
                 return;
             }
 
-            // A. Mostrar Sugestões de Presente
             lista.presentes.forEach((p, index) => {
                 const card = document.createElement('div');
                 card.classList.add('presente-card');
@@ -318,7 +364,6 @@
             modal.show();
         }
         
-        // 4. Carrega os dados para edição
         function loadDataForEdit() {
             const nome = document.getElementById('nomeSelect').value;
             const lista = dadosPresentes[nome] || { presentes: [] };
@@ -332,7 +377,6 @@
             }
         }
         
-        // 5. Adiciona campos de presente dinamicamente
         function addPresenteInput(link = '', obs = '') {
             const container = document.getElementById('presentes-container');
             
@@ -376,7 +420,6 @@
             updatePresenteNumbers();
         }
 
-        // 6. Atualiza a numeração das opções
         function updatePresenteNumbers() {
             const container = document.getElementById('presentes-container');
             const items = container.querySelectorAll('.presente-item');
@@ -389,11 +432,9 @@
                 removeButton.disabled = items.length === 1;
             });
             
-            // Controla o botão de adicionar para respeitar o limite
             document.getElementById('add-presente-btn').disabled = items.length >= MAX_PRESENTES;
         }
         
-        // 7. Envio do Formulário (Chama a função de salvar API)
         document.getElementById('presente-form').addEventListener('submit', (e) => {
             e.preventDefault();
             
@@ -418,11 +459,9 @@
                 return;
             }
 
-            // Chama a função assíncrona para salvar via API
             saveData({ Nome: nome, presentes: presentes });
         });
 
-        // 8. Utilidade: Checa se é um URL
         function isUrl(string) {
             try {
                 let tempUrl = string.trim();
@@ -438,6 +477,9 @@
         
         // --- Inicialização ---
         document.addEventListener('DOMContentLoaded', () => {
+            // Inicia o cronômetro
+            startCountdown(); 
+            
             // Inicia o carregamento dos dados da API
             loadData();
             
@@ -447,6 +489,12 @@
                 const area = document.getElementById('cadastro-form-area');
                 const isHidden = area.style.display === 'none' || area.style.display === '';
 
+                // Verifica se o prazo não expirou antes de abrir o formulário
+                if (document.getElementById('countdown').textContent === 'PRAZO ENCERRADO!') {
+                    alert('O prazo final para cadastro (30/11) já expirou. Você pode apenas visualizar as listas.');
+                    return;
+                }
+                
                 if (isHidden) {
                     document.getElementById('nomeSelect').value = '';
                     document.getElementById('presente-form').reset();
