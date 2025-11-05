@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Desejos - Natal da Família</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f8f9fa; /* Light Gray Background */
+            font-family: 'Arial', sans-serif;
+        }
+        .container {
+            max-width: 700px; /* Limita a largura para melhor visualização em mobile e desktop */
+            padding-top: 20px;
+            padding-bottom: 20px;
+        }
+        .header-section {
+            background-color: #dc3545; /* Christmas Red */
+            color: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .name-list-item {
+            cursor: pointer;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            border: 1px solid #dee2e6;
+        }
+        .name-list-item:hover {
+            background-color: #e9ecef;
+        }
+        .has-list {
+            background-color: #d4edda; /* Light Green for filled list */
+            border-color: #c3e6cb;
+        }
+        .modal-title {
+            color: #dc3545;
+        }
+        .presente-card {
+            border: 1px solid #dc3545;
+            border-left: 5px solid #dc3545;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        .presente-card strong {
+            color: #dc3545;
+        }
+        /* Esconde o form inicialmente */
+        #cadastro-form-area {
+            display: none;
+            padding: 20px;
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            background-color: #eaf4ff;
+        }
+        /* Estilo para quebra de linha em modal/visualização */
+        .pre-wrap {
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <div class="header-section text-center">
+            <h2>🎄 Natal da Família 🎁</h2>
+            <p class="mb-2">Sorteio de Presentes - Lista de Desejos</p>
+            
+            <button class="btn btn-warning btn-lg w-100" id="btn-toggle-cadastro">
+                Cadastrar / Editar Minha Lista
+            </button>
+        </div>
+        
+        <div id="cadastro-form-area">
+            <h4 class="text-primary mb-3">Preencha sua Lista de Desejos:</h4>
+            
+            <form id="presente-form">
+                
+                <div class="mb-4">
+                    <label for="nomeSelect" class="form-label">Eu sou:</label>
+                    <select class="form-select" id="nomeSelect" required>
+                        <option value="" disabled selected>Selecione seu nome para cadastrar/editar</option>
+                    </select>
+                </div>
+                
+                <h5 class="text-secondary mb-3">Sugestões de Presente:</h5>
+                <div id="presentes-container">
+                    </div>
+                
+                <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="add-presente-btn">+ Adicionar Outra Opção</button>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Salvar Minha Lista</button>
+                </div>
+            </form>
+        </div>
+
+        <h3 class="mt-4 mb-3 text-center text-primary">Clique no nome para ver a lista de presentes:</h3>
+        <div id="main-list" class="list-group">
+            </div>
+
+    </div>
+
+    <div class="modal fade" id="presentesModal" tabindex="-1" aria-labelledby="presentesModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="presentesModalLabel"></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>🎁 Sugestões de Presente:</h6>
+                    <div id="modal-presentes">
+                        </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const NOMES_UNSORTED = [
+            "Landia", "Bárbara", "Suni", "Mica", "Cadu", 
+            "Paula", "Andressa", "Ana Clara", "Mateus", "Yasmin", 
+            "Max", "Pedro Andressa", "Ana Luiza", "Gilvania", "Gelson", 
+            "Lena", "Iris", "Ronaldo", "Sofia", "Mel", 
+            "Messias", "Gabriel", "Gleissi", "Dalton", "Nicolas", 
+            "Marconi", "Grazi", "Sarah", "Thonny"
+        ];
+        
+        const NOMES = NOMES_UNSORTED.sort((a, b) => a.localeCompare(b));
+
+        const STORAGE_KEY = 'natalListaDesejos';
+        let dadosPresentes = {};
+        let presenteCount = 0; // Contador global para opções de presente
+
+        // --- Funções de Estado (localStorage) ---
+        function loadData() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            dadosPresentes = data ? JSON.parse(data) : {};
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(dadosPresentes));
+            renderMainList(); // Atualiza a lista principal após salvar
+        }
+
+        // --- Funções de UI ---
+
+        // 1. Renderiza a lista de nomes e status (em ordem alfabética)
+        function renderMainList() {
+            const listContainer = document.getElementById('main-list');
+            listContainer.innerHTML = '';
+            
+            NOMES.forEach(nome => {
+                const hasList = !!dadosPresentes[nome];
+                const listItem = document.createElement('div');
+                listItem.classList.add('name-list-item', 'list-group-item');
+                
+                let statusHtml = '';
+                if (hasList && dadosPresentes[nome].presentes.length > 0) {
+                    listItem.classList.add('has-list');
+                    statusHtml = `<span class="badge bg-success float-end">Lista OK (${dadosPresentes[nome].presentes.length} opções)</span>`;
+                } else if (hasList) {
+                    statusHtml = `<span class="badge bg-warning text-dark float-end">Lista Vazia</span>`;
+                } else {
+                    statusHtml = `<span class="badge bg-secondary float-end">Lista Vazia</span>`;
+                }
+                
+                listItem.innerHTML = `<span class="fw-bold">${nome}</span> ${statusHtml}`;
+                listItem.onclick = () => showPresentesModal(nome);
+                listContainer.appendChild(listItem);
+            });
+        }
+        
+        // 2. Preenche o SELECT de nomes (em ordem alfabética)
+        function populateNameSelect() {
+            const select = document.getElementById('nomeSelect');
+            // Remove a opção "Selecione seu nome..." antes de popular
+            select.innerHTML = '<option value="" disabled selected>Selecione seu nome para cadastrar/editar</option>'; 
+            
+            NOMES.forEach(nome => {
+                const option = document.createElement('option');
+                option.value = nome;
+                option.textContent = nome;
+                select.appendChild(option);
+            });
+            
+            // Evento para pré-carregar os dados para edição
+            select.addEventListener('change', loadDataForEdit);
+        }
+
+        // 3. Preenche o Modal de Visualização
+        function showPresentesModal(nome) {
+            const lista = dadosPresentes[nome];
+            const modalTitle = document.getElementById('presentesModalLabel');
+            const modalPresentes = document.getElementById('modal-presentes');
+            const modalElement = document.getElementById('presentesModal');
+            const modal = new bootstrap.Modal(modalElement);
+
+            modalTitle.textContent = `Lista de Desejos de ${nome}`;
+            modalPresentes.innerHTML = '';
+
+            if (!lista || lista.presentes.length === 0) {
+                modalPresentes.innerHTML = '<div class="alert alert-warning">Esta pessoa ainda não cadastrou nenhuma sugestão de presente.</div>';
+                modal.show();
+                return;
+            }
+
+            // A. Mostrar Sugestões de Presente
+            lista.presentes.forEach((p, index) => {
+                const card = document.createElement('div');
+                card.classList.add('presente-card');
+                
+                const linkContent = isUrl(p.link) 
+                    ? `<a href="${p.link}" target="_blank" class="text-primary text-decoration-underline">${p.link}</a>` 
+                    : p.link.replace(/\n/g, '<br>');
+
+                // A observação agora inclui a informação de tamanho
+                const obsContent = p.obs.replace(/\n/g, '<br>') || 'Nenhuma observação ou informação de tamanho.';
+
+                card.innerHTML = `
+                    <p class="mb-1"><strong>Opção ${index + 1}:</strong></p>
+                    <div class="mb-2 ms-3 pre-wrap">${linkContent}</div>
+                    <p class="mb-0 small"><strong>Detalhes / Tamanhos:</strong> <span class="pre-wrap">${obsContent}</span></p>
+                `;
+                modalPresentes.appendChild(card);
+            });
+            
+            modal.show();
+        }
+        
+        // --- Funções de Cadastro/Edição ---
+        
+        // 4. Carrega os dados para edição
+        function loadDataForEdit() {
+            const nome = document.getElementById('nomeSelect').value;
+            const lista = dadosPresentes[nome];
+            
+            // Limpa o formulário de presentes e adiciona a primeira opção
+            document.getElementById('presentes-container').innerHTML = ''; 
+            
+            if (lista && lista.presentes.length > 0) {
+                // Carrega as opções salvas
+                lista.presentes.forEach(p => addPresenteInput(p.link, p.obs));
+            } else {
+                addPresenteInput(); // Adiciona uma opção vazia para novo cadastro
+            }
+        }
+        
+        // 5. Adiciona campos de presente dinamicamente
+        function addPresenteInput(link = '', obs = '') {
+            const container = document.getElementById('presentes-container');
+            
+            // Incrementa o contador global de forma segura
+            presenteCount = container.children.length + 1;
+
+            const item = document.createElement('div');
+            item.classList.add('presente-item', 'border', 'p-3', 'rounded', 'mb-3', 'bg-light');
+            item.dataset.id = presenteCount;
+            
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Opção ${presenteCount}</h6>
+                    <button type="button" class="btn-close remove-presente-btn" aria-label="Close" ${presenteCount === 1 ? 'disabled' : ''}></button>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Link da Coisa ou Descrição (Obrigatório):</label>
+                    <textarea class="form-control" rows="2" data-type="link" placeholder="Ex: Link da Amazon ou 'Perfume Kaiak Natura'" required>${link}</textarea>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label">Observação / Tamanhos (Sapato, Roupa, etc.):</label>
+                    <textarea class="form-control" rows="3" data-type="obs" placeholder="Ex: Tamanho M, Sapato 38, Cor Azul. Não gosto de verde.">${obs}</textarea>
+                </div>
+            `;
+            
+            container.appendChild(item);
+            
+            // Re-bind do evento de remoção
+            const removeButton = item.querySelector('.remove-presente-btn');
+            removeButton.addEventListener('click', () => {
+                if (container.children.length > 1) {
+                    item.remove();
+                    updatePresenteNumbers();
+                } else {
+                    alert('Você deve ter pelo menos uma opção de presente.');
+                }
+            });
+
+            updatePresenteNumbers();
+        }
+
+        // 6. Atualiza a numeração das opções
+        function updatePresenteNumbers() {
+            const container = document.getElementById('presentes-container');
+            const items = container.querySelectorAll('.presente-item');
+            
+            items.forEach((item, index) => {
+                const number = index + 1;
+                item.querySelector('h6').textContent = `Opção ${number}`;
+                
+                // Habilita/Desabilita botão de remover
+                const removeButton = item.querySelector('.remove-presente-btn');
+                removeButton.disabled = items.length === 1;
+            });
+            presenteCount = items.length; 
+        }
+        
+        // 7. Envio do Formulário
+        document.getElementById('presente-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const nome = document.getElementById('nomeSelect').value;
+            
+            const presentes = [];
+            let valid = true;
+
+            document.querySelectorAll('.presente-item').forEach(item => {
+                const link = item.querySelector('textarea[data-type="link"]').value.trim();
+                const obs = item.querySelector('textarea[data-type="obs"]').value.trim();
+                
+                if (link) { 
+                    presentes.push({ link, obs });
+                } else {
+                    valid = false; 
+                }
+            });
+
+            if (presentes.length === 0 || !valid) {
+                alert('Por favor, preencha o campo "Link ou Descrição" para todas as opções de presente.');
+                return;
+            }
+
+            // Salva apenas a lista de presentes (sem campos de tamanho específicos)
+            dadosPresentes[nome] = { presentes };
+            saveData();
+            
+            alert(`Lista de Desejos de ${nome} salva/atualizada com sucesso!`);
+            document.getElementById('cadastro-form-area').style.display = 'none';
+        });
+
+        // 8. Utilidade: Checa se é um URL
+        function isUrl(string) {
+            try {
+                // Adiciona 'http://' se a URL não tiver protocolo para tentar validar
+                let tempUrl = string.trim();
+                if (!tempUrl.startsWith('http')) {
+                    tempUrl = 'http://' + tempUrl;
+                }
+                new URL(tempUrl);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+        
+        // --- Inicialização ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            populateNameSelect();
+            renderMainList();
+            
+            // Evento para adicionar mais opções
+            document.getElementById('add-presente-btn').addEventListener('click', () => addPresenteInput());
+            
+            // Evento para mostrar/esconder o formulário
+            document.getElementById('btn-toggle-cadastro').addEventListener('click', () => {
+                const area = document.getElementById('cadastro-form-area');
+                const isHidden = area.style.display === 'none' || area.style.display === '';
+
+                if (isHidden) {
+                     // Ao abrir, limpa o select e os campos e carrega uma opção vazia
+                    document.getElementById('nomeSelect').value = '';
+                    document.getElementById('presente-form').reset();
+                    document.getElementById('presentes-container').innerHTML = '';
+                    addPresenteInput();
+                    area.style.display = 'block';
+                } else {
+                    area.style.display = 'none';
+                }
+            });
+        });
+        
+    </script>
+
+</body>
+</html>
