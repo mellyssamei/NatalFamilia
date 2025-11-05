@@ -3,73 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Desejos - Natal da Família</title>
+    <title>Lista de Desejos - Natal da Família (Online)</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <style>
-        body {
-            background-color: #f8f9fa; /* Light Gray Background */
-            font-family: 'Arial', sans-serif;
-        }
-        .container {
-            max-width: 700px; /* Limita a largura para melhor visualização em mobile e desktop */
-            padding-top: 20px;
-            padding-bottom: 20px;
-        }
-        .header-section {
-            background-color: #dc3545; /* Christmas Red */
-            color: white;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        .name-list-item {
-            cursor: pointer;
-            padding: 12px 15px;
-            margin-bottom: 8px;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-            border: 1px solid #dee2e6;
-        }
-        .name-list-item:hover {
-            background-color: #e9ecef;
-        }
-        .has-list {
-            background-color: #d4edda; /* Light Green for filled list */
-            border-color: #c3e6cb;
-        }
-        .modal-title {
-            color: #dc3545;
-        }
-        .presente-card {
-            border: 1px solid #dc3545;
-            border-left: 5px solid #dc3545;
-            margin-bottom: 15px;
-            padding: 15px;
-            border-radius: 5px;
-            background-color: #fff;
-        }
-        .presente-card strong {
-            color: #dc3545;
-        }
-        /* Esconde o form inicialmente */
-        #cadastro-form-area {
-            display: none;
-            padding: 20px;
-            border: 2px dashed #007bff;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            background-color: #eaf4ff;
-        }
-        /* Estilo para quebra de linha em modal/visualização */
-        .pre-wrap {
-            white-space: pre-wrap;
+        body { background-color: #f8f9fa; font-family: 'Arial', sans-serif; }
+        .container { max-width: 700px; padding-top: 20px; padding-bottom: 20px; }
+        .header-section { background-color: #dc3545; color: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        .name-list-item { cursor: pointer; padding: 12px 15px; margin-bottom: 8px; border-radius: 5px; transition: background-color 0.3s; border: 1px solid #dee2e6; }
+        .name-list-item:hover { background-color: #e9ecef; }
+        .has-list { background-color: #d4edda; border-color: #c3e6cb; }
+        .presente-card { border: 1px solid #dc3545; border-left: 5px solid #dc3545; margin-bottom: 15px; padding: 15px; border-radius: 5px; background-color: #fff; }
+        .presente-card strong { color: #dc3545; }
+        #cadastro-form-area { display: none; padding: 20px; border: 2px dashed #007bff; border-radius: 10px; margin-bottom: 30px; background-color: #eaf4ff; }
+        .pre-wrap { white-space: pre-wrap; }
+        /* Estilo para loading */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8); z-index: 1050;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.2rem;
+            flex-direction: column;
         }
     </style>
 </head>
 <body>
+    
+    <div id="loading-overlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <p class="mt-3">Carregando listas da família...</p>
+    </div>
 
     <div class="container">
         
@@ -134,6 +100,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
+        // *** 🚨 ATENÇÃO: COLOQUE SEU ENDPOINT DA SHEETDB AQUI! 🚨 ***
+        const SHEETDB_API_URL = 'https://sheetdb.io/api/v1/rsadd84wtw4hg'; 
+        // ************************************************************
+
         const NOMES_UNSORTED = [
             "Landia", "Bárbara", "Suni", "Mica", "Cadu", 
             "Paula", "Andressa", "Ana Clara", "Mateus", "Yasmin", 
@@ -145,39 +115,144 @@
         
         const NOMES = NOMES_UNSORTED.sort((a, b) => a.localeCompare(b));
 
-        const STORAGE_KEY = 'natalListaDesejos';
         let dadosPresentes = {};
-        let presenteCount = 0; // Contador global para opções de presente
+        let presenteCount = 0; 
+        const MAX_PRESENTES = 5; // Limite de 5 sugestões para simplificar as colunas do Sheets
 
-        // --- Funções de Estado (localStorage) ---
-        function loadData() {
-            const data = localStorage.getItem(STORAGE_KEY);
-            dadosPresentes = data ? JSON.parse(data) : {};
+        // --- Funções de API (SheetDB) ---
+        
+        function showLoading(msg = 'Carregando...') {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            document.querySelector('#loading-overlay p').textContent = msg;
         }
 
-        function saveData() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(dadosPresentes));
-            renderMainList(); // Atualiza a lista principal após salvar
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
         }
 
-        // --- Funções de UI ---
+        async function loadData() {
+            if (SHEETDB_API_URL.includes('COLE_AQUI_O_SEU_ENDPOINT')) {
+                alert('ERRO: Por favor, configure o SHEETDB_API_URL no JavaScript com seu link da planilha.');
+                hideLoading();
+                return;
+            }
 
+            showLoading('Carregando listas da família...');
+            try {
+                const response = await fetch(SHEETDB_API_URL);
+                if (!response.ok) throw new Error('Erro ao carregar dados da API.');
+                
+                const rawData = await response.json();
+                
+                // Transforma a lista de Planilhas (Sheets) em um Objeto de JS mais fácil de usar
+                dadosPresentes = rawData.reduce((acc, row) => {
+                    // O campo chave no SheetDB é o primeiro: 'Nome'
+                    const nome = row.Nome;
+                    if (!nome || !NOMES.includes(nome)) return acc;
+
+                    let presentes = [];
+                    for (let i = 1; i <= MAX_PRESENTES; i++) {
+                        const linkKey = `Presente_Link_${i}`;
+                        const obsKey = `Presente_Obs_${i}`;
+                        
+                        // Garante que a linha existe e tem o link preenchido
+                        if (row[linkKey]) {
+                            presentes.push({
+                                link: row[linkKey] || '',
+                                obs: row[obsKey] || ''
+                            });
+                        }
+                    }
+
+                    acc[nome] = { presentes };
+                    return acc;
+                }, {});
+
+                renderMainList();
+            } catch (error) {
+                console.error("Falha ao carregar dados:", error);
+                alert('Erro ao carregar as listas de presente. Verifique a conexão e o URL da API.');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        async function saveData(dataToSave) {
+            const nome = dataToSave.Nome;
+            showLoading(`Salvando lista de ${nome}...`);
+            
+            // 1. Constrói o objeto de dados que o SheetDB espera
+            let sheetData = { Nome: nome };
+            
+            // Limpa todos os campos existentes antes de salvar os novos
+            for (let i = 1; i <= MAX_PRESENTES; i++) {
+                sheetData[`Presente_Link_${i}`] = '';
+                sheetData[`Presente_Obs_${i}`] = '';
+            }
+
+            // Preenche os campos com os novos dados (limitado ao MAX_PRESENTES)
+            dataToSave.presentes.slice(0, MAX_PRESENTES).forEach((p, i) => {
+                sheetData[`Presente_Link_${i + 1}`] = p.link;
+                sheetData[`Presente_Obs_${i + 1}`] = p.obs;
+            });
+            
+            // 2. Tenta encontrar e editar a linha existente (usando o campo 'Nome' como chave de busca)
+            const updateResponse = await fetch(`${SHEETDB_API_URL}/Nome/${encodeURIComponent(nome)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: sheetData })
+            });
+
+            if (updateResponse.ok) {
+                // Sucesso na edição
+                dadosPresentes[nome] = { presentes: dataToSave.presentes };
+                saveDataSuccess();
+                return;
+            }
+
+            // 3. Se falhar na edição (linha não encontrada), tenta adicionar uma nova linha
+            const addResponse = await fetch(SHEETDB_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: sheetData })
+            });
+            
+            if (addResponse.ok) {
+                // Sucesso na adição
+                dadosPresentes[nome] = { presentes: dataToSave.presentes };
+                saveDataSuccess();
+                return;
+            }
+            
+            // 4. Falha geral
+            alert('Erro ao salvar ou atualizar a lista. Tente novamente mais tarde.');
+            hideLoading();
+        }
+        
+        function saveDataSuccess() {
+            alert('Lista de Desejos salva/atualizada com sucesso! Todos os familiares podem ver.');
+            document.getElementById('cadastro-form-area').style.display = 'none';
+            loadData(); // Recarrega a lista para mostrar as mudanças
+        }
+        
+
+        // --- Funções de UI (Mantidas) ---
+        
         // 1. Renderiza a lista de nomes e status (em ordem alfabética)
         function renderMainList() {
             const listContainer = document.getElementById('main-list');
             listContainer.innerHTML = '';
             
             NOMES.forEach(nome => {
-                const hasList = !!dadosPresentes[nome];
+                const lista = dadosPresentes[nome] || { presentes: [] };
+                const hasList = lista.presentes.length > 0;
                 const listItem = document.createElement('div');
                 listItem.classList.add('name-list-item', 'list-group-item');
                 
                 let statusHtml = '';
-                if (hasList && dadosPresentes[nome].presentes.length > 0) {
+                if (hasList) {
                     listItem.classList.add('has-list');
-                    statusHtml = `<span class="badge bg-success float-end">Lista OK (${dadosPresentes[nome].presentes.length} opções)</span>`;
-                } else if (hasList) {
-                    statusHtml = `<span class="badge bg-warning text-dark float-end">Lista Vazia</span>`;
+                    statusHtml = `<span class="badge bg-success float-end">Lista OK (${lista.presentes.length} opções)</span>`;
                 } else {
                     statusHtml = `<span class="badge bg-secondary float-end">Lista Vazia</span>`;
                 }
@@ -186,12 +261,12 @@
                 listItem.onclick = () => showPresentesModal(nome);
                 listContainer.appendChild(listItem);
             });
+            populateNameSelect(); // Garante que o select também está atualizado
         }
         
         // 2. Preenche o SELECT de nomes (em ordem alfabética)
         function populateNameSelect() {
             const select = document.getElementById('nomeSelect');
-            // Remove a opção "Selecione seu nome..." antes de popular
             select.innerHTML = '<option value="" disabled selected>Selecione seu nome para cadastrar/editar</option>'; 
             
             NOMES.forEach(nome => {
@@ -201,13 +276,12 @@
                 select.appendChild(option);
             });
             
-            // Evento para pré-carregar os dados para edição
             select.addEventListener('change', loadDataForEdit);
         }
 
         // 3. Preenche o Modal de Visualização
         function showPresentesModal(nome) {
-            const lista = dadosPresentes[nome];
+            const lista = dadosPresentes[nome] || { presentes: [] };
             const modalTitle = document.getElementById('presentesModalLabel');
             const modalPresentes = document.getElementById('modal-presentes');
             const modalElement = document.getElementById('presentesModal');
@@ -216,7 +290,7 @@
             modalTitle.textContent = `Lista de Desejos de ${nome}`;
             modalPresentes.innerHTML = '';
 
-            if (!lista || lista.presentes.length === 0) {
+            if (lista.presentes.length === 0) {
                 modalPresentes.innerHTML = '<div class="alert alert-warning">Esta pessoa ainda não cadastrou nenhuma sugestão de presente.</div>';
                 modal.show();
                 return;
@@ -231,7 +305,6 @@
                     ? `<a href="${p.link}" target="_blank" class="text-primary text-decoration-underline">${p.link}</a>` 
                     : p.link.replace(/\n/g, '<br>');
 
-                // A observação agora inclui a informação de tamanho
                 const obsContent = p.obs.replace(/\n/g, '<br>') || 'Nenhuma observação ou informação de tamanho.';
 
                 card.innerHTML = `
@@ -245,21 +318,17 @@
             modal.show();
         }
         
-        // --- Funções de Cadastro/Edição ---
-        
         // 4. Carrega os dados para edição
         function loadDataForEdit() {
             const nome = document.getElementById('nomeSelect').value;
-            const lista = dadosPresentes[nome];
+            const lista = dadosPresentes[nome] || { presentes: [] };
             
-            // Limpa o formulário de presentes e adiciona a primeira opção
             document.getElementById('presentes-container').innerHTML = ''; 
             
-            if (lista && lista.presentes.length > 0) {
-                // Carrega as opções salvas
+            if (lista.presentes.length > 0) {
                 lista.presentes.forEach(p => addPresenteInput(p.link, p.obs));
             } else {
-                addPresenteInput(); // Adiciona uma opção vazia para novo cadastro
+                addPresenteInput();
             }
         }
         
@@ -267,17 +336,20 @@
         function addPresenteInput(link = '', obs = '') {
             const container = document.getElementById('presentes-container');
             
-            // Incrementa o contador global de forma segura
+            if (container.children.length >= MAX_PRESENTES) {
+                alert(`Limite de ${MAX_PRESENTES} sugestões atingido.`);
+                return;
+            }
+
             presenteCount = container.children.length + 1;
 
             const item = document.createElement('div');
             item.classList.add('presente-item', 'border', 'p-3', 'rounded', 'mb-3', 'bg-light');
-            item.dataset.id = presenteCount;
             
             item.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0">Opção ${presenteCount}</h6>
-                    <button type="button" class="btn-close remove-presente-btn" aria-label="Close" ${presenteCount === 1 ? 'disabled' : ''}></button>
+                    <button type="button" class="btn-close remove-presente-btn" aria-label="Close"></button>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Link da Coisa ou Descrição (Obrigatório):</label>
@@ -291,7 +363,6 @@
             
             container.appendChild(item);
             
-            // Re-bind do evento de remoção
             const removeButton = item.querySelector('.remove-presente-btn');
             removeButton.addEventListener('click', () => {
                 if (container.children.length > 1) {
@@ -314,14 +385,15 @@
                 const number = index + 1;
                 item.querySelector('h6').textContent = `Opção ${number}`;
                 
-                // Habilita/Desabilita botão de remover
                 const removeButton = item.querySelector('.remove-presente-btn');
                 removeButton.disabled = items.length === 1;
             });
-            presenteCount = items.length; 
+            
+            // Controla o botão de adicionar para respeitar o limite
+            document.getElementById('add-presente-btn').disabled = items.length >= MAX_PRESENTES;
         }
         
-        // 7. Envio do Formulário
+        // 7. Envio do Formulário (Chama a função de salvar API)
         document.getElementById('presente-form').addEventListener('submit', (e) => {
             e.preventDefault();
             
@@ -346,18 +418,13 @@
                 return;
             }
 
-            // Salva apenas a lista de presentes (sem campos de tamanho específicos)
-            dadosPresentes[nome] = { presentes };
-            saveData();
-            
-            alert(`Lista de Desejos de ${nome} salva/atualizada com sucesso!`);
-            document.getElementById('cadastro-form-area').style.display = 'none';
+            // Chama a função assíncrona para salvar via API
+            saveData({ Nome: nome, presentes: presentes });
         });
 
         // 8. Utilidade: Checa se é um URL
         function isUrl(string) {
             try {
-                // Adiciona 'http://' se a URL não tiver protocolo para tentar validar
                 let tempUrl = string.trim();
                 if (!tempUrl.startsWith('http')) {
                     tempUrl = 'http://' + tempUrl;
@@ -371,20 +438,16 @@
         
         // --- Inicialização ---
         document.addEventListener('DOMContentLoaded', () => {
+            // Inicia o carregamento dos dados da API
             loadData();
-            populateNameSelect();
-            renderMainList();
             
-            // Evento para adicionar mais opções
             document.getElementById('add-presente-btn').addEventListener('click', () => addPresenteInput());
             
-            // Evento para mostrar/esconder o formulário
             document.getElementById('btn-toggle-cadastro').addEventListener('click', () => {
                 const area = document.getElementById('cadastro-form-area');
                 const isHidden = area.style.display === 'none' || area.style.display === '';
 
                 if (isHidden) {
-                     // Ao abrir, limpa o select e os campos e carrega uma opção vazia
                     document.getElementById('nomeSelect').value = '';
                     document.getElementById('presente-form').reset();
                     document.getElementById('presentes-container').innerHTML = '';
