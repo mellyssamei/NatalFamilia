@@ -129,22 +129,21 @@
         const NOMES_UNSORTED = [
             "Landia", "Bárbara", "Suni", "Mica", "Cadu", 
             "Paula", "Andressa", "Ana Clara", "Mateus", "Yasmin", 
-            "Max", "Pedro Andressa", "Ana Luiza", "Gilvania", "Gelson", 
-            "Lena", "Iris", "Ronaldo", "Sofia", "Mel", 
-            "Messias", "Gabriel", "Gleissi", "Dalton", "Nicolas", 
-            "Marconi", "Grazi", "Sarah", "Thonny"
+            "Max", "Ana Luiza", "Gilvania", "Lena", "Iris", 
+            "Ronaldo", "Sofia", "Mel", "Gabriel", "Gleissi", 
+            "Dalton", "Nicolas", "Marconi", "Grazi", "Sarah", 
+            "Thonny", "Anderson" // NOVO NOME ADICIONADO
         ];
         
         const NOMES = NOMES_UNSORTED.sort((a, b) => a.localeCompare(b));
 
         let dadosPresentes = {};
         let presenteCount = 0; 
-        const MAX_PRESENTES = 5; // Limite de 5 sugestões para simplificar as colunas do Sheets
+        const MAX_PRESENTES = 5; 
 
-        // --- FUNÇÃO DO CRONÔMETRO (NOVA) ---
+        // --- FUNÇÃO DO CRONÔMETRO ---
         function startCountdown() {
             // Define a data alvo: 30 de Novembro do ano atual às 23:59:00
-            // Nota: O mês é 11 (Dezembro), então Novembro é 10 (0-indexado)
             const targetDate = new Date(new Date().getFullYear(), 10, 30, 23, 59, 0).getTime();
             const countdownElement = document.getElementById('countdown');
             const cadastroArea = document.getElementById('cadastro-form-area');
@@ -163,7 +162,6 @@
                 if (distance < 0) {
                     clearInterval(interval);
                     countdownElement.innerHTML = "PRAZO ENCERRADO!";
-                    // Desabilita a edição após o prazo
                     cadastroArea.style.display = 'none';
                     toggleButton.disabled = true;
                     toggleButton.textContent = 'PRAZO PARA CADASTRO ENCERRADO';
@@ -189,7 +187,6 @@
 
         async function loadData() {
             if (SHEETDB_API_URL.includes('COLE_AQUI_O_SEU_ENDPOINT')) {
-                // Não exibe erro no carregamento se for o placeholder
                 hideLoading();
                 return;
             }
@@ -247,7 +244,6 @@
                 sheetData[`Presente_Obs_${i + 1}`] = p.obs;
             });
             
-            // 1. Tenta encontrar e editar a linha existente
             const updateResponse = await fetch(`${SHEETDB_API_URL}/Nome/${encodeURIComponent(nome)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -260,7 +256,6 @@
                 return;
             }
 
-            // 2. Se falhar na edição, tenta adicionar uma nova linha
             const addResponse = await fetch(SHEETDB_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -273,7 +268,6 @@
                 return;
             }
             
-            // 3. Falha geral
             alert('Erro ao salvar ou atualizar a lista. Verifique se o SheetDB está ativo e se os nomes das colunas estão corretos.');
             hideLoading();
         }
@@ -285,10 +279,9 @@
         }
         
 
-        // --- Funções de UI (Limpeza, Adicionar Campo, etc.) ---
+        // --- Funções de UI ---
         
         function renderMainList() {
-            // ... (Função renderMainList completa, como na versão anterior) ...
             const listContainer = document.getElementById('main-list');
             listContainer.innerHTML = '';
             
@@ -347,15 +340,24 @@
                 const card = document.createElement('div');
                 card.classList.add('presente-card');
                 
-                const linkContent = isUrl(p.link) 
-                    ? `<a href="${p.link}" target="_blank" class="text-primary text-decoration-underline">${p.link}</a>` 
-                    : p.link.replace(/\n/g, '<br>');
+                let linkContent;
+                const rawLink = p.link.trim();
+                
+                if (isUrl(rawLink)) {
+                    let fullUrl = rawLink;
+                    if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
+                        fullUrl = 'http://' + fullUrl;
+                    }
+                    linkContent = `<a href="${fullUrl}" target="_blank" class="text-primary text-decoration-underline pre-wrap">${rawLink}</a>`; 
+                } else {
+                    linkContent = rawLink.replace(/\n/g, '<br>');
+                }
 
                 const obsContent = p.obs.replace(/\n/g, '<br>') || 'Nenhuma observação ou informação de tamanho.';
 
                 card.innerHTML = `
                     <p class="mb-1"><strong>Opção ${index + 1}:</strong></p>
-                    <div class="mb-2 ms-3 pre-wrap">${linkContent}</div>
+                    <div class="mb-2 ms-3">${linkContent}</div>
                     <p class="mb-0 small"><strong>Detalhes / Tamanhos:</strong> <span class="pre-wrap">${obsContent}</span></p>
                 `;
                 modalPresentes.appendChild(card);
@@ -465,11 +467,17 @@
         function isUrl(string) {
             try {
                 let tempUrl = string.trim();
-                if (!tempUrl.startsWith('http')) {
-                    tempUrl = 'http://' + tempUrl;
+                if (!tempUrl || tempUrl.length < 5) return false;
+                
+                let url;
+                if (!tempUrl.startsWith('http://') && !tempUrl.startsWith('https://')) {
+                    url = new URL('http://' + tempUrl);
+                } else {
+                    url = new URL(tempUrl);
                 }
-                new URL(tempUrl);
-                return true;
+                
+                return url.hostname.includes('.');
+
             } catch (e) {
                 return false;
             }
@@ -477,10 +485,7 @@
         
         // --- Inicialização ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Inicia o cronômetro
             startCountdown(); 
-            
-            // Inicia o carregamento dos dados da API
             loadData();
             
             document.getElementById('add-presente-btn').addEventListener('click', () => addPresenteInput());
@@ -489,7 +494,6 @@
                 const area = document.getElementById('cadastro-form-area');
                 const isHidden = area.style.display === 'none' || area.style.display === '';
 
-                // Verifica se o prazo não expirou antes de abrir o formulário
                 if (document.getElementById('countdown').textContent === 'PRAZO ENCERRADO!') {
                     alert('O prazo final para cadastro (30/11) já expirou. Você pode apenas visualizar as listas.');
                     return;
